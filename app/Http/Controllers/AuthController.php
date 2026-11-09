@@ -45,7 +45,9 @@ class AuthController extends Controller
             'kaprodi' => ['kaprodi'],
             'dosen' => ['kaprodi', 'dosen', 'dosen_pembimbing'],
             'dekan' => ['dekan'],
-            'warek' => ['dekan'],
+            'keuangan' => ['keuangan'],
+            'warek2' => ['warek_ii', 'warek', 'pimpinan'],
+            'warek' => ['warek_ii', 'warek', 'pimpinan'],
             'admin' => ['admin'],
         ];
 
@@ -85,8 +87,14 @@ class AuthController extends Controller
         if ($user->isDosen()) {
             return redirect()->route('kaprodi.dashboard');
         }
-        if ($user->isDekan() || $user->isWarek()) {
+        if ($user->isDekan()) {
             return redirect()->route('dekan.dashboard');
+        }
+        if ($user->isKeuangan()) {
+            return redirect()->route('keuangan.dashboard');
+        }
+        if ($user->isWarek() || $user->isWarekII()) {
+            return redirect()->route('warek2.dashboard');
         }
 
         return redirect()->route('login');

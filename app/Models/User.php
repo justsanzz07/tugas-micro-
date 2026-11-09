@@ -7,6 +7,8 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -39,6 +41,22 @@ class User extends Authenticatable
             'role' => UserRole::class,
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function ($user) {
+            try {
+                if (Schema::hasColumn($user->getTable(), 'uuid') && empty($user->uuid)) {
+                    $user->uuid = (string) Str::uuid();
+                }
+                if (Schema::hasColumn($user->getTable(), 'username') && empty($user->username)) {
+                    $user->username = explode('@', (string) $user->email)[0] ?: (string) Str::random(8);
+                }
+            } catch (\Throwable) {
+                // Ignore if schema check fails
+            }
+        });
     }
 
     public function profile()
@@ -105,9 +123,19 @@ class User extends Authenticatable
         return $this->role === UserRole::DEKAN;
     }
 
+    public function isKeuangan(): bool
+    {
+        return $this->role === UserRole::KEUANGAN;
+    }
+
+    public function isWarekII(): bool
+    {
+        return in_array($this->role, [UserRole::WAREK_II, UserRole::WAREK, UserRole::PIMPINAN], true);
+    }
+
     public function isWarek(): bool
     {
-        return in_array($this->role, [UserRole::WAREK, UserRole::PIMPINAN], true);
+        return in_array($this->role, [UserRole::WAREK, UserRole::WAREK_II, UserRole::PIMPINAN], true);
     }
 
     public function isAdmin(): bool
@@ -128,7 +156,8 @@ class User extends Authenticatable
             'kaprodi' => $this->isKaprodi(),
             'dosen', 'dosen_pembimbing' => $this->isDosen() || $this->isKaprodi(),
             'dekan' => $this->isDekan(),
-            'warek', 'pimpinan' => $this->isWarek(),
+            'keuangan' => $this->isKeuangan(),
+            'warek', 'warek_ii', 'warek2', 'pimpinan' => $this->isWarek(),
             'admin' => $this->isAdmin(),
             default => $this->role?->value === $val,
         };

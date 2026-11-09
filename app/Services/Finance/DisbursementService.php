@@ -3,6 +3,7 @@
 namespace App\Services\Finance;
 
 use App\Enums\DisbursementStatus;
+use App\Enums\SubmissionStatus;
 use App\Models\Finance\BudgetRequest;
 use App\Models\Finance\DisbursementTicket;
 use App\Models\Finance\IncentiveAward;
@@ -15,7 +16,80 @@ use Illuminate\Support\Str;
 class DisbursementService
 {
     /**
-     * Dekan menetapkan plafon dana disetujui dan memicu pembuatan tiket pencairan ke SIMPAY.
+     * Dekan menetapkan rekomendasi plafon dana tingkat fakultas.
+     */
+    public function recordDeanRecommendation(
+        Submission $submission,
+        User $dekan,
+        float $recommendedAmount,
+        ?string $notes = null
+    ): BudgetRequest {
+        return DB::connection('sipres_finance')->transaction(function () use ($submission, $dekan, $recommendedAmount, $notes) {
+            $refId = $submission->uuid ?? (string) $submission->id;
+
+            $budgetRequest = BudgetRequest::updateOrCreate(
+                ['reference_id' => $refId],
+                [
+                    'uuid' => (string) Str::uuid(),
+                    'total_proposed' => $submission->total_budget_requested ?? $recommendedAmount,
+                    'total_approved' => $recommendedAmount,
+                    'status' => 'dean_approved',
+                    'verified_by_user_id' => $dekan->id,
+                    'verified_by_name' => $dekan->name,
+                    'verification_notes' => $notes,
+                    'verified_at' => now(),
+                ]
+            );
+
+            return $budgetRequest;
+        });
+    }
+
+    /**
+     * Keuangan mengeksekusi pencairan dana setelah persetujuan Warek II.
+     */
+    public function disburseFunding(
+        Submission $submission,
+        User $keuangan,
+        float $disbursedAmount,
+        string $disbursedAt,
+        ?string $transactionRef = null,
+        ?string $proofPath = null,
+        ?string $notes = null
+    ): void {
+        DB::connection('sipres_finance')->transaction(function () use ($submission, $keuangan, $disbursedAmount, $disbursedAt, $transactionRef, $proofPath, $notes) {
+            $refId = $submission->uuid ?? (string) $submission->id;
+
+            $ticketCode = 'TKT-'.date('Ymd').'-'.str_pad((string) $submission->id, 4, '0', STR_PAD_LEFT);
+            DB::connection('sipres_finance')->table('disbursements')->updateOrInsert(
+                ['reference_id' => $refId],
+                [
+                    'uuid' => (string) Str::uuid(),
+                    'disbursement_code' => $ticketCode,
+                    'stage' => 'stage_1_advance',
+                    'amount' => $disbursedAmount,
+                    'payment_method' => 'Bank Transfer',
+                    'recipient_name' => $submission->submitter_name ?? 'Mahasiswa Pengusul',
+                    'transaction_reference' => $transactionRef,
+                    'proof_path' => $proofPath,
+                    'disbursed_at' => $disbursedAt,
+                    'disbursed_by_user_id' => $keuangan->id,
+                    'disbursed_by_name' => $keuangan->name,
+                    'status' => 'disbursed',
+                    'notes' => $notes,
+                    'updated_at' => now(),
+                ]
+            );
+
+            $submission->update([
+                'current_status' => SubmissionStatus::WAITING_LPJ,
+                'status' => 'waiting_lpj',
+            ]);
+        });
+    }
+
+    /**
+     * Warek II / Dekan menetapkan plafon dana disetujui dan memicu pembuatan tiket pencairan.
      */
     public function approveFunding(
         Submission $submission,

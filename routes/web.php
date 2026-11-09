@@ -4,8 +4,10 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Dekan\ApprovalController as DekanApprovalController;
 use App\Http\Controllers\Kaprodi\ApprovalController as KaprodiApprovalController;
+use App\Http\Controllers\Keuangan\FinanceController;
 use App\Http\Controllers\Mahasiswa\SubmissionController as MahasiswaSubmissionController;
 use App\Http\Controllers\SubmissionProposalController;
+use App\Http\Controllers\Warek\WarekTwoController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -89,12 +91,41 @@ Route::middleware(['auth', 'role:dekan'])->prefix('dekan')->name('dekan.')->grou
 
 /*
 |--------------------------------------------------------------------------
-| 4. Portal Administrator (Super Observer / Multi-Portal Hub)
+| 4. Portal Keuangan (Verifikasi Anggaran, Pencairan Dana, & Audit LPJ)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'role:keuangan'])->prefix('keuangan')->name('keuangan.')->group(function () {
+    Route::get('/dashboard', [FinanceController::class, 'dashboard'])->name('dashboard');
+    Route::get('/verifikasi/{submission}', [FinanceController::class, 'show'])->name('verify.show');
+    Route::post('/verifikasi/{submission}', [FinanceController::class, 'verifyBudget'])->name('verify.process');
+    Route::post('/pencairan/{submission}', [FinanceController::class, 'disburse'])->name('disburse.process');
+    Route::get('/lpj/{submission}', [FinanceController::class, 'lpjShow'])->name('lpj.show');
+    Route::post('/lpj/{submission}', [FinanceController::class, 'verifyLpj'])->name('lpj.process');
+    Route::get('/laporan', [FinanceController::class, 'reports'])->name('reports');
+});
+
+/*
+|--------------------------------------------------------------------------
+| 5. Portal Wakil Rektor II / Warek II (Persetujuan Final & Anggaran Universitas)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'role:warek,warek_ii,warek2'])->prefix('warek2')->name('warek2.')->group(function () {
+    Route::get('/dashboard', [WarekTwoController::class, 'dashboard'])->name('dashboard');
+    Route::get('/persetujuan/{submission}', [WarekTwoController::class, 'show'])->name('show');
+    Route::post('/persetujuan/{submission}', [WarekTwoController::class, 'process'])->name('process');
+    Route::get('/monitoring-anggaran', [WarekTwoController::class, 'monitoringBudget'])->name('monitoring.budget');
+    Route::get('/monitoring-prestasi', [WarekTwoController::class, 'monitoringAchievements'])->name('monitoring.achievements');
+});
+
+// Alias & redirect kompatibilitas warek lama
+Route::redirect('/warek', '/warek2/dashboard')->name('warek.dashboard');
+Route::any('/warek/{any?}', fn () => redirect()->route('warek2.dashboard'))->where('any', '.*');
+
+/*
+|--------------------------------------------------------------------------
+| 6. Portal Administrator (Super Observer / Multi-Portal Hub)
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'dashboard'])->name('dashboard');
 });
-
-// Redirect warek route ke portal dekan jika masih ada yang mengakses
-Route::any('/warek/{any?}', fn () => redirect()->route('dekan.dashboard'))->where('any', '.*');

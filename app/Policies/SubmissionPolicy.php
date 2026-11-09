@@ -13,7 +13,7 @@ class SubmissionPolicy
      */
     public function view(User $user, Submission $submission): bool
     {
-        if ($user->isAdmin() || $user->isWarek()) {
+        if ($user->isAdmin() || $user->isWarek() || $user->isWarekII() || $user->isKeuangan()) {
             return true;
         }
 
@@ -83,8 +83,12 @@ class SubmissionPolicy
                 && (! $user->fakultas_id || $submission->fakultas_id === $user->fakultas_id);
         }
 
-        if ($user->isWarek()) {
-            return $status === SubmissionStatus::REVIEW_WAREK;
+        if ($user->isKeuangan()) {
+            return in_array($status, [SubmissionStatus::REVIEW_KEUANGAN, SubmissionStatus::APPROVED_DEKAN], true);
+        }
+
+        if ($user->isWarek() || $user->isWarekII()) {
+            return in_array($status, [SubmissionStatus::REVIEW_WAREK, SubmissionStatus::REVIEW_WAREK_II, SubmissionStatus::APPROVED_KEUANGAN], true);
         }
 
         return false;
@@ -115,6 +119,6 @@ class SubmissionPolicy
      */
     public function validateLpj(User $user, Submission $submission): bool
     {
-        return ($user->isDekan() || $user->isWarek()) && $submission->current_status === SubmissionStatus::REVIEW_LPJ;
+        return ($user->isDekan() || $user->isWarek() || $user->isWarekII() || $user->isKeuangan()) && in_array($submission->current_status, [SubmissionStatus::REVIEW_LPJ, SubmissionStatus::WAITING_LPJ], true);
     }
 }

@@ -69,9 +69,10 @@
                         $user = auth()->user();
                         $roleBadgeColor = match($user->role?->value ?? '') {
                             'mahasiswa' => 'bg-blue-500/20 text-blue-100 border-blue-400/40',
-                            'kaprodi' => 'bg-sky-500/20 text-sky-100 border-sky-400/40',
-                            'dosen' => 'bg-sky-500/20 text-sky-100 border-sky-400/40',
+                            'kaprodi', 'dosen' => 'bg-sky-500/20 text-sky-100 border-sky-400/40',
                             'dekan' => 'bg-indigo-500/20 text-indigo-100 border-indigo-400/40',
+                            'keuangan' => 'bg-emerald-500/20 text-emerald-100 border-emerald-400/40',
+                            'warek', 'warek_ii', 'warek2' => 'bg-purple-500/20 text-purple-100 border-purple-400/40',
                             'admin' => 'bg-amber-500/20 text-amber-100 border-amber-400/40',
                             default => 'bg-slate-500/20 text-slate-200 border-slate-400/30',
                         };
@@ -110,6 +111,12 @@
                                 </a>
                                 <a href="{{ route('demo.login', 'dekan') }}" class="flex items-center px-3.5 py-2 text-xs hover:bg-indigo-50 text-slate-700 hover:text-indigo-800 {{ auth()->user()->isDekan() ? 'bg-indigo-50 font-bold text-indigo-700' : '' }}">
                                     <i class="fa-solid fa-award w-5 text-indigo-600"></i> Dekan Fakultas
+                                </a>
+                                <a href="{{ route('demo.login', 'keuangan') }}" class="flex items-center px-3.5 py-2 text-xs hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 {{ auth()->user()->isKeuangan() ? 'bg-emerald-50 font-bold text-emerald-700' : '' }}">
+                                    <i class="fa-solid fa-calculator w-5 text-emerald-600"></i> Keuangan (Verifikasi & Cair)
+                                </a>
+                                <a href="{{ route('demo.login', 'warek2') }}" class="flex items-center px-3.5 py-2 text-xs hover:bg-purple-50 text-slate-700 hover:text-purple-800 {{ auth()->user()->isWarek() ? 'bg-purple-50 font-bold text-purple-700' : '' }}">
+                                    <i class="fa-solid fa-crown w-5 text-purple-600"></i> Wakil Rektor II (Warek II)
                                 </a>
                                 <a href="{{ route('demo.login', 'admin') }}" class="flex items-center px-3.5 py-2 text-xs hover:bg-blue-50 text-slate-700 hover:text-blue-800 {{ auth()->user()->isAdmin() ? 'bg-blue-50 font-bold text-blue-700' : '' }}">
                                     <i class="fa-solid fa-shield-halved w-5 text-blue-600"></i> Administrator (Observer)
@@ -164,6 +171,14 @@
                         <a href="{{ route('dekan.dashboard') }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 {{ request()->routeIs('dekan.dashboard*') ? 'bg-indigo-100 text-indigo-900 font-bold' : 'text-slate-600 hover:text-indigo-900 hover:bg-indigo-50' }}">
                             <i class="fa-solid fa-building-columns text-indigo-600"></i>
                             <span>Portal Dekan</span>
+                        </a>
+                        <a href="{{ route('keuangan.dashboard') }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 {{ request()->routeIs('keuangan.*') ? 'bg-emerald-100 text-emerald-900 font-bold' : 'text-slate-600 hover:text-emerald-900 hover:bg-emerald-50' }}">
+                            <i class="fa-solid fa-calculator text-emerald-600"></i>
+                            <span>Portal Keuangan</span>
+                        </a>
+                        <a href="{{ route('warek2.dashboard') }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 {{ request()->routeIs('warek2.*', 'warek.*') ? 'bg-purple-100 text-purple-900 font-bold' : 'text-slate-600 hover:text-purple-900 hover:bg-purple-50' }}">
+                            <i class="fa-solid fa-crown text-purple-600"></i>
+                            <span>Portal Warek II</span>
                         </a>
                         <a href="{{ route('dekan.reports') }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 {{ request()->routeIs('dekan.reports') ? 'bg-blue-100 text-blue-900 font-bold' : 'text-slate-600 hover:text-blue-900 hover:bg-blue-50' }}">
                             <i class="fa-solid fa-chart-column text-blue-600"></i>

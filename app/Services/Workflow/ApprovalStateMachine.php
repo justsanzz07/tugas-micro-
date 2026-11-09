@@ -54,13 +54,35 @@ class ApprovalStateMachine
                 ]
             );
 
-            // Step 2: Dekan (Persetujuan Final Fakultas, Plafon Dana & Surat Tugas)
+            // Step 2: Dekan (Persetujuan Dekan Fakultas & Rekomendasi Plafon)
             ApprovalStep::updateOrCreate(
                 ['workflow_instance_id' => $flow->id, 'step_order' => 2],
                 [
                     'reference_id' => $refId,
-                    'step_name' => 'Persetujuan Final Dekan Fakultas',
+                    'step_name' => 'Persetujuan Dekan Fakultas & Rekomendasi Plafon',
                     'role_required' => 'dekan',
+                    'status' => 'pending',
+                ]
+            );
+
+            // Step 3: Keuangan (Verifikasi Anggaran Keuangan)
+            ApprovalStep::updateOrCreate(
+                ['workflow_instance_id' => $flow->id, 'step_order' => 3],
+                [
+                    'reference_id' => $refId,
+                    'step_name' => 'Verifikasi Anggaran Keuangan',
+                    'role_required' => 'keuangan',
+                    'status' => 'pending',
+                ]
+            );
+
+            // Step 4: Warek II (Persetujuan Final Wakil Rektor II)
+            ApprovalStep::updateOrCreate(
+                ['workflow_instance_id' => $flow->id, 'step_order' => 4],
+                [
+                    'reference_id' => $refId,
+                    'step_name' => 'Persetujuan Final Wakil Rektor II',
+                    'role_required' => 'warek_ii',
                     'status' => 'pending',
                 ]
             );
@@ -159,16 +181,26 @@ class ApprovalStateMachine
         $targetRole = match ($currentStatus) {
             SubmissionStatus::REVISION_KAPRODI, SubmissionStatus::REVISION_DOSEN => 'kaprodi',
             SubmissionStatus::REVISION_DEKAN => 'dekan',
+            SubmissionStatus::REVISION_KEUANGAN => 'keuangan',
+            SubmissionStatus::REVISION_WAREK, SubmissionStatus::REVISION_WAREK_II => 'warek_ii',
             default => 'kaprodi',
         };
 
-        $targetStatus = ($targetRole === 'kaprodi')
-            ? SubmissionStatus::REVIEW_KAPRODI
-            : SubmissionStatus::REVIEW_DEKAN;
+        $targetStatus = match ($targetRole) {
+            'kaprodi' => SubmissionStatus::REVIEW_KAPRODI,
+            'dekan' => SubmissionStatus::REVIEW_DEKAN,
+            'keuangan' => SubmissionStatus::REVIEW_KEUANGAN,
+            'warek_ii' => SubmissionStatus::REVIEW_WAREK_II,
+            default => SubmissionStatus::REVIEW_KAPRODI,
+        };
 
-        $targetDbStatus = ($targetRole === 'kaprodi')
-            ? 'kaprodi_review'
-            : 'dekan_review';
+        $targetDbStatus = match ($targetRole) {
+            'kaprodi' => 'kaprodi_review',
+            'dekan' => 'dekan_review',
+            'keuangan' => 'keuangan_review',
+            'warek_ii' => 'warek_review',
+            default => 'kaprodi_review',
+        };
 
         return DB::connection('sipres_workflow')->transaction(function () use ($submission, $flow, $targetRole, $targetStatus, $targetDbStatus, $mahasiswa, $notes) {
             $step = $flow->steps()
@@ -265,7 +297,80 @@ class ApprovalStateMachine
         }
 
         if ($approverRole === ApproverRole::DEKAN) {
-            // DEKAN APPROVE FINAL
+            $approvedAmount = (float) ($extraData['approved_amount'] ?? $submission->total_budget_requested ?? 0);
+
+            // 1. Rekomendasi plafon dana Dekan Fakultas
+            $this->disbursementService->recordDeanRecommendation($submission, $actor, $approvedAmount, $notes);
+
+            // 2. Terbitkan Surat Dispensasi Kuliah Fakultas & Surat Tugas (kewenangan fakultas)
+            $this->letterService->generateDispensasiLetter($submission, $actor);
+            $this->letterService->generateSuratTugasLetter($submission, $actor);
+
+            // 3. Pastikan Step 3 (keuangan) dan Step 4 (warek_ii) siap
+            $refId = $submission->uuid ?? (string) Str::uuid();
+            ApprovalStep::firstOrCreate(
+                ['workflow_instance_id' => $flow->id, 'step_order' => 3],
+                [
+                    'reference_id' => $refId,
+                    'step_name' => 'Verifikasi Anggaran Keuangan',
+                    'role_required' => 'keuangan',
+                    'status' => 'pending',
+                ]
+            );
+            ApprovalStep::firstOrCreate(
+                ['workflow_instance_id' => $flow->id, 'step_order' => 4],
+                [
+                    'reference_id' => $refId,
+                    'step_name' => 'Persetujuan Final Wakil Rektor II',
+                    'role_required' => 'warek_ii',
+                    'status' => 'pending',
+                ]
+            );
+
+            $flow->update([
+                'current_step' => 'keuangan',
+                'status' => 'in_progress',
+            ]);
+
+            $newStatus = SubmissionStatus::REVIEW_KEUANGAN;
+            $submission->update([
+                'current_status' => $newStatus,
+                'status' => 'keuangan_review',
+                'total_budget_approved' => $approvedAmount,
+            ]);
+
+            return $newStatus;
+        }
+
+        if ($approverRole === ApproverRole::KEUANGAN) {
+            // KEUANGAN VERIFIKASI -> Lolos ke WAREK II
+            $refId = $submission->uuid ?? (string) Str::uuid();
+            ApprovalStep::firstOrCreate(
+                ['workflow_instance_id' => $flow->id, 'step_order' => 4],
+                [
+                    'reference_id' => $refId,
+                    'step_name' => 'Persetujuan Final Wakil Rektor II',
+                    'role_required' => 'warek_ii',
+                    'status' => 'pending',
+                ]
+            );
+
+            $flow->update([
+                'current_step' => 'warek_ii',
+                'status' => 'in_progress',
+            ]);
+
+            $newStatus = SubmissionStatus::REVIEW_WAREK_II;
+            $submission->update([
+                'current_status' => $newStatus,
+                'status' => 'warek_review',
+            ]);
+
+            return $newStatus;
+        }
+
+        if ($approverRole === ApproverRole::WAREK || $approverRole === ApproverRole::WAREK_II) {
+            // WAREK II APPROVE FINAL
             $flow->steps()->where('status', 'pending')->update([
                 'status' => 'approved',
                 'acted_by_user_id' => $actor->id,
@@ -278,22 +383,16 @@ class ApprovalStateMachine
                 'status' => 'approved',
             ]);
 
-            $approvedAmount = (float) ($extraData['approved_amount'] ?? $submission->total_budget_requested ?? 0);
+            $finalApprovedAmount = (float) ($extraData['approved_amount'] ?? $submission->total_budget_approved ?? $submission->total_budget_requested ?? 0);
 
-            // 1. Catat penetapan dana disetujui & tiket pencairan
-            $this->disbursementService->approveFunding($submission, $actor, $approvedAmount, $notes);
-
-            // 2. Terbitkan Surat Dispensasi Kuliah Fakultas
-            $this->letterService->generateDispensasiLetter($submission, $actor);
-
-            // 3. Terbitkan Surat Tugas Resmi Kegiatan
-            $this->letterService->generateSuratTugasLetter($submission, $actor);
+            // 1. Catat penetapan dana final & tiket pencairan
+            $this->disbursementService->approveFunding($submission, $actor, $finalApprovedAmount, $notes);
 
             $newStatus = SubmissionStatus::APPROVED_FINAL;
             $submission->update([
                 'current_status' => $newStatus,
                 'status' => 'approved',
-                'total_budget_approved' => $approvedAmount,
+                'total_budget_approved' => $finalApprovedAmount,
             ]);
 
             return $newStatus;
@@ -320,9 +419,13 @@ class ApprovalStateMachine
             'status' => 'revision_requested',
         ]);
 
-        $newStatus = ($currentStep->approver_role === ApproverRole::KAPRODI)
-            ? SubmissionStatus::REVISION_KAPRODI
-            : SubmissionStatus::REVISION_DEKAN;
+        $newStatus = match ($currentStep->approver_role) {
+            ApproverRole::KAPRODI => SubmissionStatus::REVISION_KAPRODI,
+            ApproverRole::DEKAN => SubmissionStatus::REVISION_DEKAN,
+            ApproverRole::KEUANGAN => SubmissionStatus::REVISION_KEUANGAN,
+            ApproverRole::WAREK, ApproverRole::WAREK_II => SubmissionStatus::REVISION_WAREK_II,
+            default => SubmissionStatus::REVISION_KAPRODI,
+        };
 
         $submission->update([
             'current_status' => $newStatus,
@@ -374,6 +477,14 @@ class ApprovalStateMachine
             }
             if ($actor->fakultas_id && $submission->fakultas_id && $actor->fakultas_id !== $submission->fakultas_id) {
                 throw new Exception('Proposal ini bukan berasal dari fakultas yang Anda pimpin.');
+            }
+        } elseif ($step->approver_role === ApproverRole::KEUANGAN) {
+            if (! $actor->isKeuangan() && ! $actor->isAdmin()) {
+                throw new Exception('Hanya Bagian Keuangan yang dapat memproses tahap ini.');
+            }
+        } elseif ($step->approver_role === ApproverRole::WAREK || $step->approver_role === ApproverRole::WAREK_II) {
+            if (! $actor->isWarek() && ! $actor->isWarekII() && ! $actor->isAdmin()) {
+                throw new Exception('Hanya Wakil Rektor II yang dapat memproses tahap ini.');
             }
         }
     }

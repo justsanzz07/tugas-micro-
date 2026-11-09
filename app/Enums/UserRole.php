@@ -14,6 +14,7 @@ enum UserRole: string
     case KAPRODI = 'kaprodi';
     case KEMAHASISWAAN = 'kemahasiswaan';
     case KEUANGAN = 'keuangan';
+    case WAREK_II = 'warek_ii';
     case ADMIN = 'admin';
 
     public function label(): string
@@ -22,7 +23,7 @@ enum UserRole: string
             self::MAHASISWA => 'Mahasiswa',
             self::DOSEN, self::DOSEN_PEMBIMBING => 'Dosen Pembimbing',
             self::DEKAN => 'Dekan',
-            self::WAREK, self::PIMPINAN => 'Wakil Rektor',
+            self::WAREK, self::PIMPINAN, self::WAREK_II => 'Wakil Rektor II',
             self::ORMAWA => 'Ormawa',
             self::KAPRODI => 'Kaprodi',
             self::KEMAHASISWAAN => 'Kemahasiswaan',
