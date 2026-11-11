@@ -1,6 +1,10 @@
 <?php
 
+use App\Http\Controllers\Admin\AuditTrailController as AdminAuditController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\ReportController as AdminReportController;
+use App\Http\Controllers\Admin\SubmissionMonitorController as AdminSubmissionController;
+use App\Http\Controllers\Admin\UserManagementController as AdminUserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Dekan\ApprovalController as DekanApprovalController;
 use App\Http\Controllers\Kaprodi\ApprovalController as KaprodiApprovalController;
@@ -127,5 +131,24 @@ Route::any('/warek/{any?}', fn () => redirect()->route('warek2.dashboard'))->whe
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    // 1. Dashboard
+    Route::get('/', fn () => redirect()->route('admin.dashboard'));
     Route::get('/dashboard', [AdminDashboardController::class, 'dashboard'])->name('dashboard');
+
+    // 2. Pengajuan Lomba
+    Route::get('/pengajuan', [AdminSubmissionController::class, 'index'])->name('submissions.index');
+    Route::get('/pengajuan/{submission}', [AdminSubmissionController::class, 'show'])->name('submissions.show');
+
+    // 3. Manajemen Pengguna
+    Route::get('/pengguna', [AdminUserController::class, 'index'])->name('users.index');
+    Route::post('/pengguna', [AdminUserController::class, 'store'])->name('users.store');
+    Route::put('/pengguna/{user}', [AdminUserController::class, 'update'])->name('users.update');
+    Route::post('/pengguna/{user}/toggle', [AdminUserController::class, 'toggleStatus'])->name('users.toggle');
+    Route::post('/pengguna/{user}/reset-password', [AdminUserController::class, 'resetPassword'])->name('users.resetPassword');
+
+    // 4. Audit Trail
+    Route::get('/audit-trail', [AdminAuditController::class, 'index'])->name('audit.index');
+
+    // 5. Laporan
+    Route::get('/laporan', [AdminReportController::class, 'index'])->name('reports.index');
 });
